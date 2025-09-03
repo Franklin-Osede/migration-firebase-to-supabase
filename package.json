@@ -1,0 +1,33 @@
+{
+  "name": "firebase-supabase-migration",
+  "version": "1.0.0",
+  "description": "Migración completa de Firebase a Supabase con esquemas optimizados",
+  "main": "index.js",
+  "scripts": {
+    "migrate": "node scripts/migrate.js",
+    "validate": "node scripts/validate.js",
+    "setup": "node scripts/setup.js",
+    "test": "node scripts/test-migration.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.11.0",
+    "@supabase/supabase-js": "^2.38.0",
+    "dotenv": "^16.3.1",
+    "commander": "^11.1.0",
+    "chalk": "^4.1.2",
+    "ora": "^5.4.1",
+    "cli-progress": "^3.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "firebase",
+    "supabase",
+    "migration",
+    "database",
+    "postgresql"
+  ],
+  "author": "Tu Nombre",
+  "license": "MIT"
+}
