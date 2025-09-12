@@ -5,7 +5,13 @@
   "main": "index.js",
   "scripts": {
     "migrate": "node scripts/migrate.js",
+    "schemas": "node scripts/create-schemas.js",
+    "schemas:optimized": "node scripts/create-schemas-optimized.js",
+    "create:tables": "node scripts/create-tables-direct.js",
+    "create:tables:rls": "node scripts/create-tables-with-rls.js",
+    "configure:rls": "node scripts/configure-rls-only.js",
     "validate": "node scripts/validate.js",
+    "validate:schema": "node scripts/validate-schema.js",
     "setup": "node scripts/setup.js",
     "test": "node scripts/test-migration.js"
   },
