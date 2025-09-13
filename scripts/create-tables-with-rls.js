@@ -265,6 +265,18 @@ const SCHEMA_PHASES = {
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID REFERENCES users(id) ON DELETE CASCADE,
       
+      -- Datos del perfil de inversor
+      investor_type TEXT(50) NOT NULL CHECK (investor_type IN ('individual', 'company')),
+      first_name TEXT(100),
+      last_name TEXT(100),
+      company_name TEXT(255),
+      tax_id TEXT(50),
+      representative_name TEXT(100),
+      representative_last_name TEXT(100),
+      
+      -- Perfil principal
+      is_primary BOOLEAN DEFAULT FALSE,       -- ← Indica si es el perfil principal
+      
       -- Estadísticas agregadas
       total_projects INTEGER DEFAULT 0,
       total_volume DECIMAL(15,2) DEFAULT 0,
@@ -280,9 +292,9 @@ const SCHEMA_PHASES = {
       
       -- Metadatos
       created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
       
-      UNIQUE(user_id)
+      -- Sin UNIQUE(user_id) para permitir múltiples perfiles
     );`,
     
     `CREATE TABLE IF NOT EXISTS project_timeline (
@@ -410,7 +422,7 @@ const SCHEMA_PHASES = {
   // Fase 7: Reservas
   phase7: [
     `-- Fase 7: Reservas
-    CREATE TABLE IF NOT EXISTS reserves (
+    CREATE TABLE IF NOT EXISTS reserves_mangopay (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID REFERENCES users(id) ON DELETE CASCADE,
       investment_id UUID REFERENCES investments(id) ON DELETE CASCADE,
@@ -1007,8 +1019,8 @@ async function createIndexes() {
     'CREATE INDEX IF NOT EXISTS idx_transactions_investment_status ON transactions_mangopay(investment_id, status);',
     'CREATE INDEX IF NOT EXISTS idx_dividend_claims_user_investment ON dividend_claims(user_id, investment_id);',
     'CREATE INDEX IF NOT EXISTS idx_dividend_claims_user_status ON dividend_claims(user_id, status);',
-    'CREATE INDEX IF NOT EXISTS idx_reserves_user_investment ON reserves(user_id, investment_id);',
-    'CREATE INDEX IF NOT EXISTS idx_reserves_user_status ON reserves(user_id, status);',
+    'CREATE INDEX IF NOT EXISTS idx_reserves_mangopay_user_investment ON reserves_mangopay(user_id, investment_id);',
+    'CREATE INDEX IF NOT EXISTS idx_reserves_mangopay_user_status ON reserves_mangopay(user_id, status);',
     'CREATE INDEX IF NOT EXISTS idx_audit_logs_user_created ON audit_logs(user_id, created_at);',
     'CREATE INDEX IF NOT EXISTS idx_audit_logs_resource_created ON audit_logs(resource_type, created_at);',
     'CREATE INDEX IF NOT EXISTS idx_user_notifications_user_read ON user_notifications(user_id, is_read);',
@@ -1157,13 +1169,28 @@ async function configureUUIDv6() {
     
     console.log('   ✅ Extensión uuid-ossp instalada');
     
-    // Crear función para generar UUID optimizado (UUIDv4 con mejor performance)
+    // Crear función para generar UUIDv6 real
     const uuidFunction = `
-      CREATE OR REPLACE FUNCTION generate_optimized_uuid()
+      CREATE OR REPLACE FUNCTION generate_uuidv6()
       RETURNS UUID AS $$
+      DECLARE
+        timestamp_ms BIGINT;
+        uuid_hex TEXT;
+        random_part TEXT;
       BEGIN
-        -- UUID optimizado para mejor performance en inserción
-        RETURN uuid_generate_v4();
+        -- Obtener timestamp en milisegundos
+        timestamp_ms := EXTRACT(EPOCH FROM NOW()) * 1000;
+        
+        -- Generar parte aleatoria (62 bits)
+        random_part := lpad(to_hex(floor(random() * 4611686018427387904)::bigint), 16, '0');
+        
+        -- Construir UUIDv6: timestamp(48) + version(4) + variant(2) + random(62)
+        uuid_hex := lpad(to_hex(timestamp_ms), 12, '0') ||  -- 48 bits timestamp
+                    '6' ||                                    -- 4 bits versión (0110)
+                    lpad(to_hex(floor(random() * 4)::int), 1, '0') ||  -- 2 bits variante (10)
+                    random_part;                              -- 62 bits aleatorios
+        
+        RETURN uuid_hex::UUID;
       END;
       $$ LANGUAGE plpgsql;
     `;
