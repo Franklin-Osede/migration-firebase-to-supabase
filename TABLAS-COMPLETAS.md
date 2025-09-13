@@ -27,30 +27,30 @@ updated_at                TIMESTAMPTZ DEFAULT NOW()
 ```
 **Descripción:** Tabla principal de usuarios del sistema con Firebase UID y soft delete
 
-### **2. user_profiles** (27 columnas)
+### **2. user_profiles** (28 columnas)
 ```sql
 id                        UUID PRIMARY KEY DEFAULT gen_random_uuid()
 user_id                   UUID REFERENCES users(id)
+profile_type              TEXT CHECK (profile_type IN ('individual', 'company'))
 first_name                VARCHAR(100)
 last_name                 VARCHAR(100)
 date_of_birth             DATE
-nationality               VARCHAR(3)
+dni                       VARCHAR(20) UNIQUE (dni, profile_type) WHERE dni IS NOT NULL
+nationality               VARCHAR(100)
+residence_country         VARCHAR(100)
 address                   VARCHAR(500)
 city                      VARCHAR(100)
 postal_code               VARCHAR(20)
-country                   VARCHAR(3)
-phone                     VARCHAR(20)
-is_kyc_verified           BOOLEAN DEFAULT FALSE
-kyc_status                TEXT CHECK (kyc_status IN ('pending', 'approved', 'rejected'))
-kyc_verified_at           TIMESTAMPTZ
-kyc_verified_by           UUID
 company_name              VARCHAR(255)
-company_registration      VARCHAR(100)
-company_tax_id            VARCHAR(100)
-company_address           VARCHAR(500)
-company_city              VARCHAR(100)
-company_postal_code       VARCHAR(20)
-company_country           VARCHAR(3)
+tax_id                    VARCHAR(50)
+representative_name       VARCHAR(100)
+representative_last_name  VARCHAR(100)
+kyc_status                TEXT CHECK (kyc_status IN ('pending', 'approved', 'rejected'))
+kyc_data                  JSONB CHECK (jsonb_typeof(kyc_data) = 'object')
+profile_picture_path      VARCHAR(500)
+profile_picture_url       VARCHAR(500)
+documents_paths           TEXT[]
+documents_urls            TEXT[]
 is_deleted                BOOLEAN DEFAULT FALSE
 deleted_at                TIMESTAMPTZ
 deleted_by                UUID
@@ -58,7 +58,7 @@ version                   INTEGER DEFAULT 1
 created_at                TIMESTAMPTZ DEFAULT NOW()
 updated_at                TIMESTAMPTZ DEFAULT NOW()
 ```
-**Descripción:** Perfiles detallados de usuarios con datos personales/empresa y KYC
+**Descripción:** Perfiles detallados con DNI único por tipo (individual/company) y datos KYC
 
 ### **3. two_factor_auth** (11 columnas)
 ```sql
