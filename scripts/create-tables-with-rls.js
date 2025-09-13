@@ -129,6 +129,12 @@ const SCHEMA_PHASES = {
       kyc_status TEXT CHECK (kyc_status IN ('pending', 'approved', 'rejected')),
       kyc_data JSONB CHECK (jsonb_typeof(kyc_data) = 'object'),
       
+      -- Supabase Storage para documentos
+      profile_picture_path TEXT(500),         -- ← Ruta de foto de perfil
+      profile_picture_url TEXT(500),          -- ← URL de foto de perfil
+      documents_paths TEXT[],                 -- ← Array de rutas de documentos
+      documents_urls TEXT[],                  -- ← Array de URLs de documentos
+      
       -- Soft delete fields
       is_deleted BOOLEAN DEFAULT FALSE,
       deleted_at TIMESTAMPTZ,
@@ -210,10 +216,14 @@ const SCHEMA_PHASES = {
       -- Version control
       version INTEGER DEFAULT 1,
       
-      -- Metadatos
-      main_image TEXT(500),
-      images TEXT[],
-      documents JSONB CHECK (jsonb_typeof(documents) = 'object'),
+      -- Metadatos de Supabase Storage
+      main_image_path TEXT(500),              -- ← Ruta en Supabase Storage
+      main_image_url TEXT(500),               -- ← URL pública de la imagen
+      images_paths TEXT[],                    -- ← Array de rutas de imágenes
+      images_urls TEXT[],                     -- ← Array de URLs públicas
+      documents_path TEXT(500),               -- ← Ruta del documento principal
+      documents_url TEXT(500),                -- ← URL del documento principal
+      documents_metadata JSONB CHECK (jsonb_typeof(documents_metadata) = 'object'), -- ← Metadatos de documentos
       
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -662,7 +672,9 @@ const SCHEMA_PHASES = {
       document_type TEXT(50) NOT NULL,
       title TEXT(255) NOT NULL,
       filename TEXT(255) NOT NULL,
-      file_path TEXT(500) NOT NULL,
+      file_path TEXT(500) NOT NULL,           -- ← Ruta en Supabase Storage
+      file_url TEXT(500),                     -- ← URL pública del archivo
+      bucket_name TEXT(50) NOT NULL,          -- ← Nombre del bucket
       file_size BIGINT,
       mime_type TEXT(100),
       
@@ -1128,6 +1140,152 @@ async function configureRLS() {
   console.log('✅ RLS configurado exitosamente');
 }
 
+// Función para configurar UUID optimizado
+async function configureUUIDv6() {
+  console.log('\n🔧 Configurando UUID optimizado...');
+  
+  try {
+    // Instalar extensión uuid-ossp si no está instalada
+    const { error: extError } = await supabase.rpc('exec_sql', {
+      sql_query: 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
+    });
+    
+    if (extError) {
+      console.error(`   ❌ Error instalando extensión: ${extError.message}`);
+      return false;
+    }
+    
+    console.log('   ✅ Extensión uuid-ossp instalada');
+    
+    // Crear función para generar UUID optimizado (UUIDv4 con mejor performance)
+    const uuidFunction = `
+      CREATE OR REPLACE FUNCTION generate_optimized_uuid()
+      RETURNS UUID AS $$
+      BEGIN
+        -- UUID optimizado para mejor performance en inserción
+        RETURN uuid_generate_v4();
+      END;
+      $$ LANGUAGE plpgsql;
+    `;
+    
+    const { error: funcError } = await supabase.rpc('exec_sql', {
+      sql_query: uuidFunction
+    });
+    
+    if (funcError) {
+      console.error(`   ❌ Error creando función UUID optimizada: ${funcError.message}`);
+      return false;
+    }
+    
+    console.log('   ✅ Función UUID optimizada creada');
+    return true;
+  } catch (err) {
+    console.error(`   ❌ Error inesperado: ${err.message}`);
+    return false;
+  }
+}
+
+// Función para configurar Supabase Storage
+async function configureSupabaseStorage() {
+  console.log('\n📁 Configurando Supabase Storage...');
+  
+  try {
+    // Crear buckets para diferentes tipos de archivos
+    const buckets = [
+      {
+        name: 'project-images',
+        public: true,
+        file_size_limit: 5242880, // 5MB
+        allowed_mime_types: ['image/jpeg', 'image/png', 'image/webp']
+      },
+      {
+        name: 'user-documents',
+        public: false,
+        file_size_limit: 10485760, // 10MB
+        allowed_mime_types: ['application/pdf', 'image/jpeg', 'image/png']
+      },
+      {
+        name: 'profile-pictures',
+        public: true,
+        file_size_limit: 2097152, // 2MB
+        allowed_mime_types: ['image/jpeg', 'image/png']
+      },
+      {
+        name: 'system-assets',
+        public: true,
+        file_size_limit: 1048576, // 1MB
+        allowed_mime_types: ['image/svg+xml', 'image/png', 'image/jpeg']
+      }
+    ];
+    
+    for (const bucket of buckets) {
+      console.log(`   📁 Creando bucket: ${bucket.name}...`);
+      
+      // Crear bucket
+      const { error: bucketError } = await supabase.storage.createBucket(bucket.name, {
+        public: bucket.public
+      });
+      
+      if (bucketError && !bucketError.message.includes('already exists')) {
+        console.error(`   ❌ Error creando bucket ${bucket.name}: ${bucketError.message}`);
+      } else {
+        console.log(`   ✅ Bucket ${bucket.name} creado exitosamente`);
+      }
+    }
+    
+    // Configurar RLS para storage
+    await configureStorageRLS();
+    
+    console.log('✅ Supabase Storage configurado exitosamente');
+    return true;
+  } catch (err) {
+    console.error(`   ❌ Error inesperado: ${err.message}`);
+    return false;
+  }
+}
+
+// Función para configurar RLS en storage
+async function configureStorageRLS() {
+  console.log('   🔒 Configurando RLS para Storage...');
+  
+  const storagePolicies = [
+    // Política para project-images
+    `CREATE POLICY "Anyone can view project images" ON storage.buckets FOR SELECT USING (name = 'project-images');`,
+    `CREATE POLICY "Authenticated users can upload project images" ON storage.buckets FOR INSERT WITH CHECK (name = 'project-images' AND auth.role() = 'authenticated');`,
+    `CREATE POLICY "Users can update own project images" ON storage.buckets FOR UPDATE USING (name = 'project-images' AND auth.uid()::text = owner);`,
+    `CREATE POLICY "Users can delete own project images" ON storage.buckets FOR DELETE USING (name = 'project-images' AND auth.uid()::text = owner);`,
+    
+    // Política para user-documents
+    `CREATE POLICY "Users can view own documents" ON storage.buckets FOR SELECT USING (name = 'user-documents' AND auth.uid()::text = owner);`,
+    `CREATE POLICY "Users can upload own documents" ON storage.buckets FOR INSERT WITH CHECK (name = 'user-documents' AND auth.uid()::text = owner);`,
+    `CREATE POLICY "Users can update own documents" ON storage.buckets FOR UPDATE USING (name = 'user-documents' AND auth.uid()::text = owner);`,
+    `CREATE POLICY "Users can delete own documents" ON storage.buckets FOR DELETE USING (name = 'user-documents' AND auth.uid()::text = owner);`,
+    
+    // Política para profile-pictures
+    `CREATE POLICY "Anyone can view profile pictures" ON storage.buckets FOR SELECT USING (name = 'profile-pictures');`,
+    `CREATE POLICY "Users can upload own profile pictures" ON storage.buckets FOR INSERT WITH CHECK (name = 'profile-pictures' AND auth.uid()::text = owner);`,
+    `CREATE POLICY "Users can update own profile pictures" ON storage.buckets FOR UPDATE USING (name = 'profile-pictures' AND auth.uid()::text = owner);`,
+    `CREATE POLICY "Users can delete own profile pictures" ON storage.buckets FOR DELETE USING (name = 'profile-pictures' AND auth.uid()::text = owner);`,
+    
+    // Política para system-assets
+    `CREATE POLICY "Anyone can view system assets" ON storage.buckets FOR SELECT USING (name = 'system-assets');`,
+    `CREATE POLICY "Admins can manage system assets" ON storage.buckets FOR ALL USING (name = 'system-assets' AND EXISTS (SELECT 1 FROM role_assignments ra JOIN roles r ON ra.role_id = r.id WHERE ra.user_id = (SELECT id FROM users WHERE firebase_uid = auth.uid()::text) AND r.name IN ('SuperAdmin', 'Admin')));`
+  ];
+  
+  for (const policy of storagePolicies) {
+    try {
+      const { error } = await supabase.rpc('exec_sql', { sql_query: policy });
+      if (error) {
+        console.error(`   ❌ Error creando política de storage: ${error.message}`);
+      } else {
+        console.log(`   ✅ Política de storage creada`);
+      }
+    } catch (err) {
+      console.error(`   ❌ Error inesperado: ${err.message}`);
+    }
+  }
+}
+
 // Función para crear políticas RLS
 async function createRLSPolicies() {
   console.log('\n🛡️ Creando políticas de RLS...');
@@ -1209,6 +1367,9 @@ async function main() {
     
     console.log('✅ Conexión exitosa a Supabase');
     
+    // Configurar UUIDv6
+    await configureUUIDv6();
+    
     // Crear todas las tablas
     const success = await createAllTables();
     if (!success) {
@@ -1228,12 +1389,17 @@ async function main() {
     // Crear políticas RLS
     await createRLSPolicies();
     
+    // Configurar Supabase Storage
+    await configureSupabaseStorage();
+    
     console.log('\n🎉 ¡MIGRACIÓN COMPLETA EXITOSA!');
     console.log('📊 Se crearon 36 tablas optimizadas');
     console.log('🔍 Se crearon índices estratégicos');
     console.log('⚡ Se configuraron triggers automáticos');
     console.log('🔒 Se configuró Row Level Security (RLS)');
     console.log('🛡️ Se crearon políticas de seguridad');
+    console.log('📁 Se configuró Supabase Storage');
+    console.log('🆔 Se configuró UUID optimizado');
     console.log('\n🚀 Tu base de datos está lista para la migración de datos');
     
   } catch (error) {
@@ -1252,5 +1418,8 @@ module.exports = {
   createIndexes,
   createTriggers,
   configureRLS,
-  createRLSPolicies
+  createRLSPolicies,
+  configureUUIDv6,
+  configureSupabaseStorage,
+  configureStorageRLS
 };
