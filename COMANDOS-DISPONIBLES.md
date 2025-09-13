@@ -1,7 +1,7 @@
-# 🚀 MIGRACIÓN FIREBASE → SUPABASE
+# 🚀 COMANDOS DISPONIBLES - MIGRACIÓN FIREBASE → SUPABASE
 
-**Estado:** ✅ **COMPLETADO Y FUNCIONAL**  
-**Fecha:** 13 de Septiembre, 2025
+**Fecha:** 13 de Septiembre, 2025  
+**Estado:** ✅ **COMPLETADO Y FUNCIONAL**
 
 ---
 
@@ -62,7 +62,7 @@ npm run migrate
 
 ---
 
-## 🎯 **COMANDOS MÁS ÚTILES**
+## 🎯 **COMANDOS MÁS ÚTILES PARA TU MANAGER**
 
 ### **1. Verificar Estado Actual**
 ```bash
@@ -102,6 +102,37 @@ npm run validate:schema
 npm run diagnose
 ```
 **Resultado:** Verifica que la conexión a Supabase funciona correctamente
+
+---
+
+## 📊 **EJEMPLOS DE USO**
+
+### **Verificar que todo funciona:**
+```bash
+# 1. Verificar conexión
+npm run diagnose
+
+# 2. Verificar tablas
+npm run verify:simple
+
+# 3. Ver lista de tablas
+npm run schema:sql:list
+```
+
+### **Explorar estructura de datos:**
+```bash
+# Ver tablas principales
+npm run schema:sql users
+npm run schema:sql investments
+npm run schema:sql user_investments
+npm run schema:sql transactions_mangopay
+```
+
+### **Recrear base de datos si es necesario:**
+```bash
+# Recrear todo desde cero
+npm run create:tables:rls
+```
 
 ---
 
@@ -181,14 +212,6 @@ npm run diagnose
 ✅ **0 errores críticos**  
 
 **🚀 La base de datos está 100% lista para producción**
-
----
-
-## 📚 **DOCUMENTACIÓN ADICIONAL**
-
-- **`TABLAS-COMPLETAS.md`** - Todas las tablas con columnas detalladas
-- **`LIMPIEZA-COMPLETADA.md`** - Resumen de archivos eliminados
-- **`REPORTE-MIGRACION-COMPLETO.md`** - Reporte ejecutivo completo
 
 ---
 
