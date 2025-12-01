@@ -236,5 +236,8 @@ RLS Configuration: Some Storage RLS policies may require manual configuration in
 License
 MIT
 
+Author
+Franklin Osede Prieto
+
 Contributing
 This is a private repository. For contributions or questions, please contact the project maintainers.
